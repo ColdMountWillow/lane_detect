@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 车道线检测 - 基于霍夫变换
 使用 Canny 边缘检测 + ROI + HoughLinesP 检测车道线
@@ -18,7 +16,7 @@ def gaussian_blur(img, kernel_size=5):
     
     Args:
         img: 输入图像
-        kernel_size: 高斯核大小（必须是奇数）
+        kernel_size: 高斯核大小
     
     Returns:
         滤波后的图像
@@ -55,9 +53,9 @@ def region_of_interest(img, top_ratio=0.55):
     height, width = img.shape
     # 创建全零遮罩
     mask = np.zeros_like(img)
-    # 定义多边形顶点（梯形，保留下半部分）
+    # 定义多边形顶点：梯形，保留下半部分
     # 底部两个角点：左下角和右下角
-    # 顶部两个角点：稍微向内收缩，形成梯形（符合透视效果）
+    # 顶部两个角点：稍微向内收缩，形成梯形
     bottom_left = (0, height - 1)
     bottom_right = (width - 1, height - 1)
     top_left = (int(width * 0.05), int(height * top_ratio))
@@ -65,7 +63,7 @@ def region_of_interest(img, top_ratio=0.55):
     
     # 填充多边形区域为白色（255）
     vertices = np.array([[bottom_left, top_left, top_right, bottom_right]], dtype=np.int32)
-    cv2.fillPoly(mask, vertices, 255)
+    cv2.fillPoly(mask, vertices, 255) # type: ignore
     
     # 应用遮罩
     masked_img = cv2.bitwise_and(img, mask)
@@ -78,17 +76,17 @@ def hough_lines_detection(edges, threshold=50, min_line_len=50, max_line_gap=100
     
     Args:
         edges: 边缘检测结果
-        threshold: 累加器阈值（检测直线所需的最少交点）
+        threshold: 累加器阈值，检测直线所需的最少交点
         min_line_len: 线段最小长度
-        max_line_gap: 线段间最大间隙（可连接成一条线）
+        max_line_gap: 线段间最大间隙，可连接成一条线
     
     Returns:
         检测到的线段列表，每个元素为 [x1, y1, x2, y2]
     """
     lines = cv2.HoughLinesP(
         edges,
-        rho=1,              # 距离精度（像素）
-        theta=np.pi/180,    # 角度精度（弧度）
+        rho=1,              # 距离精度，1 像素
+        theta=np.pi/180,    # 角度精度， 1 度
         threshold=threshold,
         minLineLength=min_line_len,
         maxLineGap=max_line_gap
@@ -110,8 +108,8 @@ def filter_lane_lines(lines, slope_thresh=0.5, img_width=None):
         img_width: 图像宽度，用于更智能的左右分类
     
     Returns:
-        left_lines: 左车道线候选（负斜率或位于左半部分）
-        right_lines: 右车道线候选（正斜率或位于右半部分）
+        left_lines: 左车道线候选，负斜率或位于左半部分
+        right_lines: 右车道线候选，正斜率或位于右半部分
     """
     left_lines = []
     right_lines = []
@@ -119,7 +117,7 @@ def filter_lane_lines(lines, slope_thresh=0.5, img_width=None):
     for line in lines:
         x1, y1, x2, y2 = line[0]
         
-        # 计算斜率（注意图像坐标系 y 向下）
+        # 计算斜率，图像坐标系 y 向下
         if x2 - x1 == 0:  # 避免除零
             continue
         
@@ -129,8 +127,8 @@ def filter_lane_lines(lines, slope_thresh=0.5, img_width=None):
         if abs(slope) < slope_thresh:
             continue
         
-        # 负斜率：左车道线（从左上到右下）
-        # 正斜率：右车道线（从左下到右上）
+        # 负斜率：左车道线
+        # 正斜率：右车道线
         # 如果斜率接近0但通过了阈值，根据位置判断
         if img_width is not None:
             line_center_x = (x1 + x2) / 2
@@ -223,24 +221,6 @@ def draw_lane_lines(img, left_line, right_line, color=(0, 255, 0), thickness=8):
     """
     result = img.copy()
     
-    # 如果两条线都存在，可以绘制填充区域（可选）
-    if left_line is not None and right_line is not None:
-        x1_l, y1_l, x2_l, y2_l = left_line
-        x1_r, y1_r, x2_r, y2_r = right_line
-        
-        # 创建填充区域（车道区域）
-        lane_area = np.array([
-            [x1_l, y1_l],
-            [x2_l, y2_l],
-            [x2_r, y2_r],
-            [x1_r, y1_r]
-        ], np.int32)
-        
-        # 绘制半透明填充（可选，注释掉以保持简洁）
-        # overlay = result.copy()
-        # cv2.fillPoly(overlay, [lane_area], (0, 255, 0))
-        # cv2.addWeighted(overlay, 0.3, result, 0.7, 0, result)
-    
     # 绘制左车道线
     if left_line is not None:
         x1, y1, x2, y2 = left_line
@@ -302,7 +282,7 @@ def process_single_image(img_path, output_dir, args):
     print(f"  右车道候选数量: {len(right_lines)}")
     
     # 7. 拟合左右车道线
-    # 绘制起点设置为图像高度的指定比例，值越小线条越长（从更上方开始）
+    # 绘制起点设置为图像高度的指定比例，值越小线条越长，从更上方开始
     draw_top_ratio = args.draw_top_ratio if hasattr(args, 'draw_top_ratio') else 0.25
     left_line = fit_lane_line(left_lines, img.shape, args.roi_top_ratio, draw_top_ratio) if left_lines else None
     right_line = fit_lane_line(right_lines, img.shape, args.roi_top_ratio, draw_top_ratio) if right_lines else None
@@ -329,7 +309,7 @@ def process_single_image(img_path, output_dir, args):
     cv2.imwrite(str(output_path), result)
     print(f"  结果已保存: {output_path}")
     
-    # 10. 可选显示
+    # 10. 显示
     if args.show:
         cv2.imshow("原始图像", img)
         cv2.imshow("边缘检测", edges)
